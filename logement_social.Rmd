@@ -1,0 +1,204 @@
+---
+title: "Logements Sociaux à Montréal: Une analyse à partir des données de Montréal Données Ouvertes"
+author: "Onat Ekinci"
+date: "Mars 4, 2021"
+output:  
+  html_document:
+    keep_md: true
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+  bibliography: bibliography.json    
+
+---
+
+<style>
+body{
+  font-family: Helvetica;
+  font-size: 12pt;
+}
+} 
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+Il existe un besoin criant de logements sociaux au Québec ([Crise du logement social - Radio Canada ](https://ici.radio-canada.ca/nouvelle/1771979/logement-social-crise-montreal-quebec-gatineau)) et les besoins ne cessent d'augmenter en raison de la spéculation immobilière des derniers décennies ([Spéculation Immobilière - IRIS](https://cdn.iris-recherche.qc.ca/uploads/publication/file/Spe_culation_immobilie_re_-_Logement_locatif_WEB.pdf))
+
+Une analyse créée à partir des données dans le site web:
+[Montréal Données Ouvertes](https://donnees.montreal.ca/ville-de-montreal/logements-sociaux)
+
+Les données sont catégorisées par type de projet, soit:
+
+**HLM** : Logements publics gérés par l’Office municipal d’habitation de Montréal, dont le loyer est fixé à 25 % des revenus du ménage. Cette catégorie inclut la Corporation des Habitations Jeanne-Mance.
+
+**OMHM** : Logements publics abordables issus de projets de l’Office municipale d’habitation de Montréal hors programme HLM et gérés sous une forme s’apparentant aux OBNL avec la participations des résidents.
+
+**SHDM** : logements locatifs publics et abordables appartenant à la Société d’habitation et de développement de Montréal et dont certains projets peuvent être gérés par un OBNL.
+
+**OBNL** : Logements locatifs possédés et gérés par un organisme à but non lucratif et qui visent une clientèle ayant des difficultés à se loger convenablement. Les OBNL offrent parfois du soutien communautaire à leurs locataires.
+
+**Coop** : Logements appartenant à une coopérative qui les louent à ses membres. Les coopératives voient à offrir des logements de qualité à prix abordables tout en favorisant une mixité socio-économique dans les projets.
+
+
+
+Dans l'analyse, on utilise les librairies sf, tidyverse et ggtext: 
+```{r, tidy=TRUE}
+library(sf)
+library(tidyverse)
+library(ggtext)
+```
+
+Il faut téléchager les fichiers shape du site web de Montréal Données Ouvertes:
+
+```{r, tidy=TRUE}
+setwd("C:\\Users\\O4000\\Documents\\r_geospatial\\logement_social")
+mtl_hlm <- st_read("logsoc_donneesouvertes_20191231.shp")  #read the shapefile 
+print(mtl_hlm[1:15], n = 6)
+ggplot(mtl_hlm) + 
+  geom_sf(aes(size = nb_log), fill = "red", color = "blue", alpha = 0.5)
+```
+
+On observe qu'il y a 15 champs, dont le type du projet, le nombre de logements par projet, le nom de l'arrondissement. 
+
+Les données GIS sont sous format point. Pour ajouter la carte de Montréal dans l'arrière-plan, on doit aussi télécharger le fichier shape pour des régions administratives ([Montréal Polygone ](https://donnees.montreal.ca/ville-de-montreal/polygones-arrondissements))
+
+```{r}
+mtl_adm <- st_read("LIMADMIN.shp")
+ggplot(mtl_adm) + 
+  geom_sf(color = "black") +
+  geom_point(data = mtl_hlm, aes(x = longitude , y = latitude, size = nb_log), fill = "red", color = "blue", alpha = 0.2)
+```
+
+
+On observe qu'il y a une concentration de logements sociaux dans le sud de l'ile de Montréal.
+
+On peut également spécifier le type de logement social sur la carte:
+
+
+```{r}
+ggplot(mtl_adm) + 
+  geom_sf(color = "black") +
+  geom_point(data = mtl_hlm, aes(x = longitude , y = latitude, size = nb_log, color = projettype), alpha = 0.2) +
+  scale_fill_gradient(low = "green", high = "red", na.value = NA)
+```
+
+La distribution par type de projet sur l'ile de Montréal:
+
+```{r}
+ggplot(mtl_adm) + 
+  geom_sf(color = "black") +
+  geom_point(data = mtl_hlm, aes(x = longitude , y = latitude, size = nb_log), alpha = 0.5, color = "steelblue") +
+  facet_wrap(~projettype, nrow = 2) +
+    theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+### La présence des HLM selon l'arrondissement à Montréal 
+
+Si on voulait voir la distribution des HLM selon l'arrondissement:
+
+```{r}
+projet_hlm <- filter(mtl_hlm, projettype == "HLM")
+ggplot( data = projet_hlm ) +
+  geom_bar( mapping = aes( x = arrond, fill = arrond)) +
+    theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
+```
+
+On observe qu'une grande majorité des HLM se trouve dans le Sud-Ouest de Montréal. Et il y a une grande concentration dans le sud, avec le Sud-Ouest, Mercier-Hochelaga-Maisonneuve, Verdun et Ville-Marie constituant le top 4. 
+
+
+### La présence des coopératives d'habitation selon l'arrondissement à Montréal 
+
+Qu'en est-il des coop?:
+
+```{r}
+projet_coop <- filter(mtl_hlm, projettype == "Coop")
+ggplot( data = projet_coop ) +
+  geom_bar( mapping = aes( x = arrond, fill = arrond))+
+    labs(
+    title = "Coopératives d'habitation selon l'arrondissement") +
+  theme_bw() +
+  theme(
+    axis.text.x=element_blank(),
+    axis.ticks.x=element_blank(),
+    plot.title = element_markdown(size = 12, lineheight = 2, hjust=0.5)
+  )
+```
+
+
+Cette fois-ci c'est le Mercier-Hochelaga-Maisonneuve qui vient en première, mais le constat est le même que pour les HLM, une concentration dans la partie sud de Montréal.
+
+### La construction des logements sociaux à Montréal dans les dernières années
+
+```{r}
+ggplot( data = mtl_hlm ) +
+  geom_bar( mapping = aes( x = an_orig, fill = projettype)) +
+    facet_wrap(~projettype, nrow = 3)
+```
+
+
+On constate que la construction des logements sociaux a beaucoup diminué dans les derniers décennies. Ce sont seulement des OBNL qui semblent avoir une courbe de croissance constante, bien que limitée. 
+
+On pourrait aussi faire une analyse selon le type de projet: 
+
+
+#### La construction des HLM à Montréal 
+
+```{r, fig.width=5,fig.height=3}
+projet_hlm <- filter(mtl_hlm, projettype == "HLM")
+ggplot( data = projet_hlm ) +
+  geom_bar( mapping = aes( x = an_orig), fill = "red") 
+```
+
+Dans la figure, on peut constater qu'il n'y a quasiment pas eu de construction de HLM depuis 1995. 
+
+
+#### La construction des coop d'habitation à Montréal 
+
+Le constat pour les coop est également décourageant, la construction reste assez faible, surtout dans les derniers décennies:
+
+```{r, fig.width=5,fig.height=3}
+projet_hlm <- filter(mtl_hlm, projettype == "Coop")
+ggplot( data = projet_hlm ) +
+  geom_bar( mapping = aes( x = an_orig), fill = "green") 
+```
+
+
+#### La construction des OBNL à Montréal 
+
+```{r, fig.width=5,fig.height=3}
+projet_hlm <- filter(mtl_hlm, projettype == "OBNL")
+ggplot( data = projet_hlm ) +
+  geom_bar( mapping = aes( x = an_orig), fill = "blue") 
+```
+
+## Le type de logements sociaux à Montréal 
+
+```{r}
+arrondissement_sud_ouest <- filter(mtl_hlm, arrond == "Le Sud-Ouest")
+ggplot( data = mtl_hlm) + geom_bar( mapping = aes( x = projettype, fill = projettype))
+```
+
+Clairement, les coopératives d'habitation constituent la majorité des logements sociaux, sans considérer le nombre de logements. 
+
+
+### CONCLUSION
+
+La pénurie de logements sociaux à Montréal peut facilement être observé à partir des données publiques. On constate aussi qu’Il y a eu très peu de construction dans les dernières décennies. 
+
+La priorité des politiques de logement au Canada a toujours été de favoriser l’accès à la propriété, plutôt que d’assister les locataires [Arsenault, 2018]. Selon [Londerville & Steele, 2014], les dépenses fiscales annuelles, comme la non-imposition du gain en capital sur les résidences principales, visant à soutenir les propriétaires, sont augmentés de 7 à 9 milliards de dollars entre 1993 et 2013.
+
+
+### REFERENCES
+
+Gabriel Arsenault, L’Économie sociale au Québec. Une perspective politique, Presses de l’Université du Québec, coll. « Politeia », 2018, 256 pages
+
+Jane Londerville, Marion Steele,  https://homelesshub.ca/sites/default/files/attachments/SOHC2014-Backgrounder.pdf , 2018, 
+
